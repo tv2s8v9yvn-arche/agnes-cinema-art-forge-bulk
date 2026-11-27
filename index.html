@@ -474,6 +474,7 @@ input:focus,textarea:focus,select:focus{
 
   <div class="tabs">
     <button class="tab active" data-tab="create">🎨 Créer</button>
+    <button class="tab" data-tab="video">🎥 Publicité vidéo</button>
     <button class="tab" data-tab="admin">⚙️ Admin styles</button>
     <button class="tab" data-tab="bulk">📋 Bulk</button>
     <button class="tab" data-tab="history">🖼️ Ma bibliothèque</button>
@@ -580,7 +581,32 @@ input:focus,textarea:focus,select:focus{
     </div>
   </section>
 
-  <!-- ================= ADMIN ================= -->
+  <!-- ================= VIDEO PROMPT STUDIO ================= -->
+  <section id="tab-video" class="hidden">
+    <div class="card">
+      <h2>🎥 Studio publicité vidéo</h2>
+      <p class="sub">Prépare un script de 6 scènes et des prompts prêts à envoyer à un moteur vidéo. Aucun appel vidéo payant n'est lancé ici.</p>
+      <label class="lab">Produit / idée de publicité</label>
+      <textarea id="videoIdea" placeholder="Décris ton produit, ta marque, le message, le public et les personnages…"></textarea>
+      <div class="row">
+        <div><label class="lab">Format</label><select id="videoFormat"><option value="9:16">Vertical 9:16 (Reels / TikTok)</option><option value="16:9">Horizontal 16:9</option><option value="1:1">Carré 1:1</option></select></div>
+        <div><label class="lab">Durée par scène</label><select id="videoDuration"><option value="5">5 secondes</option><option value="8">8 secondes</option><option value="10">10 secondes</option></select></div>
+      </div>
+      <button class="btn-mega" id="videoBuildBtn">✨ Préparer les 6 scènes</button>
+      <div id="videoPromptStatus" class="status">Les prompts seront construits gratuitement à partir de ton texte.</div>
+    </div>
+    <div id="videoScenesBox" class="hidden card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap"><h2>Storyboard vidéo</h2><button class="btn btn-gold" id="videoCopyBtn">📋 Copier les 6 prompts</button></div>
+      <div id="videoScenes"></div>
+    </div>
+    <div class="card">
+      <h2>🔌 Moteur vidéo</h2>
+      <p>Cette première étape prépare les scripts. Pour lancer réellement les clips, il faudra connecter un fournisseur vidéo et protéger la clé API côté serveur (pas dans le site GitHub Pages public).</p>
+      <p class="status warn">Aucune génération payante ni aucun débit de crédits ne sera lancé sans cette connexion.</p>
+    </div>
+  </section>
+
+<!-- ================= ADMIN ================= -->
   <section id="tab-admin" class="hidden">
     <h2>Mes styles</h2>
     <p class="sub" style="font-size:.82rem">Éditez vos prompts de style. <b>✨ IA améliore</b> réécrit le prompt via Agnes. <b>+ Nouveau style</b> ajoute un style personnalisé.</p>
@@ -2171,11 +2197,33 @@ async function loadFavorites(page = 1) {
 }
 
 /* ============================================================
+   STUDIO VIDEO — préparation gratuite de prompts
+============================================================ */
+const VIDEO_SCENE_LABELS = ["1 — Hook / accroche visuelle","2 — Problème / désir","3 — Révélation du produit","4 — Démonstration / expérience","5 — Payoff émotionnel","6 — Hero shot / appel à l'action"];
+function buildVideoScenes() {
+  const idea = $('videoIdea').value.trim();
+  if (!idea) { toast("Décris d'abord ton produit ou ton idée.", "warn"); return; }
+  const format = $('videoFormat').value, duration = $('videoDuration').value;
+  const guidance = ["Create an attention-grabbing opening shot, immediately intriguing, with a cinematic camera move.","Show the customer's problem, need or desire in a relatable visual way.","Dramatically reveal the product or brand, clearly visible and central.","Show the product being used or experienced, with dynamic camera movement and visual details.","Deliver an emotional, satisfying moment that connects the product to the audience.","Finish with a polished hero shot, readable brand/product presentation and a clear call to action."];
+  const scenes = guidance.map((g,i)=>"SCENE "+(i+1)+" — "+VIDEO_SCENE_LABELS[i]+"\nDuration: "+duration+" seconds. Aspect ratio: "+format+".\nCreative brief: "+idea+"\nShot direction: "+g+"\nCinematic video: natural motion, purposeful camera movement, lighting consistent with the overall ad, high production value, no jump cuts within the clip. Maintain product, character and environment continuity across all six scenes.\nAudio: French dialogue or voice-over if appropriate, with natural sound effects; avoid unintelligible speech.\n");
+  $('videoScenes').innerHTML = scenes.map((s,i)=>'<div class="sb-editor"><h4>'+esc(VIDEO_SCENE_LABELS[i])+'</h4><textarea class="video-scene-prompt" style="min-height:150px">'+esc(s)+'</textarea><button class="btn-mini" data-video-copy="'+i+'">Copier cette scène</button></div>').join('');
+  $('videoScenesBox').classList.remove('hidden');
+  $('videoPromptStatus').className='status ok';
+  $('videoPromptStatus').textContent='6 prompts prêts. Ils ne lancent aucune génération vidéo.';
+  $('videoScenes').querySelectorAll('[data-video-copy]').forEach(btn=>btn.addEventListener('click',()=>navigator.clipboard.writeText($('videoScenes').querySelectorAll('.video-scene-prompt')[Number(btn.dataset.videoCopy)].value).then(()=>toast('Prompt copié','ok')).catch(()=>toast('Copie impossible','err'))));
+}
+function copyVideoScenes() {
+  const prompts=Array.from($('videoScenes').querySelectorAll('.video-scene-prompt')).map(t=>t.value).join('\n\n---\n\n');
+  if(!prompts){toast('Prépare d’abord les scènes.','warn');return;}
+  navigator.clipboard.writeText(prompts).then(()=>toast('Les 6 prompts sont copiés.','ok')).catch(()=>toast('Copie impossible','err'));
+}
+
+/* ============================================================
    TABS
 ============================================================ */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  ['create','admin','bulk','history','favorites'].forEach(id => {
+  ['create','video','admin','bulk','history','favorites'].forEach(id => {
     const el = $('tab-' + id);
     if (el) el.classList.toggle('hidden', id !== name);
   });
@@ -2246,6 +2294,8 @@ function bind() {
 
   // Génération
   $('generateBtn').addEventListener('click', generate);
+  $('videoBuildBtn').addEventListener('click', buildVideoScenes);
+  $('videoCopyBtn').addEventListener('click', copyVideoScenes);
 
   // + Nouveau style
   $('addStyleBtn').addEventListener('click', async () => {
