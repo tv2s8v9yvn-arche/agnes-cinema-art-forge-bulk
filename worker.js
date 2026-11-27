@@ -10,7 +10,13 @@ const cors = (origin) => ({
   "Content-Type": "application/json"
 });
 const json = (body,status=200,headers={}) => new Response(JSON.stringify(body),{status,headers});
-const endpointOk = (s) => typeof s==="string" && /^[a-zA-Z0-9._/-]+$/.test(s) && !s.includes("..");\n// Normalize provider responses to JSON so the browser can handle failures predictably.\nconst relayResponse = async (upstream, headers) => {\n  const raw=await upstream.text();\n  let data; try { data=JSON.parse(raw); } catch { data={error:upstream.ok?"Unexpected provider response":"Provider returned a non-JSON error",detail:raw.slice(0,500)}; }\n  return json(data,upstream.status,headers);\n};
+const endpointOk = (s) => typeof s==="string" && /^[a-zA-Z0-9._/-]+$/.test(s) && !s.includes("..");
+// Normalize provider responses to JSON so the browser can handle failures predictably.
+const relayResponse = async (upstream, headers) => {
+  const raw=await upstream.text();
+  let data; try { data=JSON.parse(raw); } catch { data={error:upstream.ok?"Unexpected provider response":"Provider returned a non-JSON error",detail:raw.slice(0,500)}; }
+  return json(data,upstream.status,headers);
+};
 export default {
  async fetch(request, env) {
   const origin=request.headers.get("Origin")||"";
@@ -40,7 +46,7 @@ export default {
   const id=url.searchParams.get("request_id");
   if (!id || !/^[a-f0-9-]{20,64}$/i.test(id)) return json({error:"Invalid request id"},400,headers);
   if (url.pathname==="/status" && request.method==="GET") {
-   try { const upstream=await fetch(base+"/requests/"+id+"/status",{headers:{"Authorization":"Key "+env.FAL_KEY}}); return new Response(await upstream.text(),{status:upstream.status,headers}); } catch { return json({error:"Provider status failed"},502,headers); }
+   try { const upstream=await fetch(base+"/requests/"+id+"/status",{headers:{"Authorization":"Key "+env.FAL_KEY}}); return await relayResponse(upstream,headers); } catch { return json({error:"Provider status failed"},502,headers); }
   }
   if (url.pathname==="/result" && request.method==="GET") {
    try { const upstream=await fetch(base+"/requests/"+id,{headers:{"Authorization":"Key "+env.FAL_KEY}}); return new Response(await upstream.text(),{status:upstream.status,headers}); } catch { return json({error:"Provider result failed"},502,headers); }
