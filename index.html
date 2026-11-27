@@ -603,9 +603,13 @@ input:focus,textarea:focus,select:focus{
       <div id="videoScenes"></div>
     </div>
     <div class="card">
-      <h2>🔌 Moteur vidéo</h2>
-      <p>Cette première étape prépare les scripts. Pour lancer réellement les clips, il faudra connecter un fournisseur vidéo et protéger la clé API côté serveur (pas dans le site GitHub Pages public).</p>
-      <p class="status warn">Aucune génération payante ni aucun débit de crédits ne sera lancé sans cette connexion.</p>
+      <h2>🔌 Connexion du moteur vidéo (configuration)</h2>
+      <p class="sub">Ces champs deviennent utiles après déploiement du relais Cloudflare. Le token est conservé uniquement dans ce navigateur.</p>
+      <label class="lab">Adresse du Worker</label><input id="videoRelayUrl" type="url" placeholder="https://ton-worker.workers.dev">
+      <label class="lab">Token d'accès</label><input id="videoRelayToken" type="password" placeholder="Token configuré dans Cloudflare">
+      <button class="btn-mini" id="videoSaveRelay">Enregistrer la connexion</button><button class="btn-mini" id="videoHealthBtn">Tester la connexion</button>
+      <div id="videoRelayStatus" class="status">Relais non configuré. Aucun clip ne sera lancé tant que ces informations ne sont pas enregistrées.</div>
+      <p class="status warn">La génération peut être facturée par le fournisseur. Chaque scène est lancée séparément; vérifie le coût avant de lancer.</p>
     </div>
   </section>
 
@@ -2210,11 +2214,64 @@ function buildVideoScenes() {
   const language = $('videoLanguage').value, audio = $('videoAudio').value, style = $('videoStyle').value.trim();
   const guidance = ["Open with a visually striking hook in the first second; define the shot, subject action and camera move.","Visualize the customer's problem, need or desire; keep it relatable and specific.","Reveal the product/brand with a memorable composition and clear product visibility.","Demonstrate the product in use; show tactile details, realistic interaction and movement.","Create an emotional payoff with a human reaction or satisfying visual resolution.","End on a premium hero shot, brand/product clearly visible and a concise call to action."];
   const scenes = guidance.map((g,i)=>"SCENE "+(i+1)+" — "+VIDEO_SCENE_LABELS[i]+"\nDuration: "+duration+" seconds. Aspect ratio: "+format+".\nCreative brief: "+idea+"\nAd style: "+(style||"cinematic commercial, polished and engaging")+"\nShot direction: "+g+"\nCAMERA: specify framing, lens feel, camera movement and movement speed; use a deliberate cinematic move.\nVISUAL CONTINUITY: preserve the same product design, logo, character identity, wardrobe, location and color palette across all scenes; physically realistic motion, coherent lighting, no flicker or morphing. One continuous shot, no internal jump cuts.\nAUDIO: "+audio+". Spoken lines and voice-over must be in "+language+", short, natural and intelligible; specify speaker and delivery if dialogue is appropriate. Avoid inventing brand claims.\n");
-  $('videoScenes').innerHTML = scenes.map((s,i)=>'<div class="sb-editor"><h4>'+esc(VIDEO_SCENE_LABELS[i])+'</h4><textarea class="video-scene-prompt" style="min-height:150px">'+esc(s)+'</textarea><button class="btn-mini" data-video-copy="'+i+'">Copier cette scène</button></div>').join('');
+  $('videoScenes').innerHTML = scenes.map((s,i)=>'<div class="sb-editor"><h4>'+esc(VIDEO_SCENE_LABELS[i])+'</h4><textarea class="video-scene-prompt" style="min-height:150px">'+esc(s)+'</textarea><button class="btn-mini" data-video-copy="'+i+'">Copier cette scène</button><button class="btn-mini btn-gold" data-video-generate="'+i+'">🎬 Générer cette scène</button><div class="status sub">Lancer ce clip peut entraîner un coût.</div></div>').join('');
   $('videoScenesBox').classList.remove('hidden');
   $('videoPromptStatus').className='status ok';
   $('videoPromptStatus').textContent='6 prompts prêts. Ils ne lancent aucune génération vidéo.';
+  $('videoScenes').querySelectorAll('[data-video-generate]').forEach(btn=>btn.addEventListener('click',()=>generateVideoClip(btn,$('videoScenes').querySelectorAll('.video-scene-prompt')[Number(btn.dataset.videoGenerate)],Number(btn.dataset.videoGenerate))));
   $('videoScenes').querySelectorAll('[data-video-copy]').forEach(btn=>btn.addEventListener('click',()=>navigator.clipboard.writeText($('videoScenes').querySelectorAll('.video-scene-prompt')[Number(btn.dataset.videoCopy)].value).then(()=>toast('Prompt copié','ok')).catch(()=>toast('Copie impossible','err'))));
+}
+// Video relay UI helpers (requires configured Cloudflare Worker)
+function getVideoRelayConfig() {
+  return {url:($('videoRelayUrl').value||'').trim().replace(/\/$/,''), token:($('videoRelayToken').value||'').trim()};
+}
+function setVideoRelayStatus(message, cls='status') {
+  const el=$('videoRelayStatus'); if(el){el.className=cls;el.textContent=message;}
+}
+async function videoRelayRequest(path, options={}) {
+  const cfg=getVideoRelayConfig();
+  if(!cfg.url||!cfg.token) throw new Error('Enregistre d’abord l’adresse du Worker et le token.');
+  const response=await fetch(cfg.url+path,{...options,headers:{...(options.headers||{}),'Authorization':'Bearer '+cfg.token,'Content-Type':'application/json'}});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.error||'Erreur du relais ('+response.status+')');
+  return data;
+}
+async function saveVideoRelayConfig() {
+  const cfg=getVideoRelayConfig(); if(!cfg.url||!cfg.token){setVideoRelayStatus('Adresse et token requis.');return;}
+  try{localStorage.setItem('artforge_video_relay_url',cfg.url);localStorage.setItem('artforge_video_relay_token',cfg.token);setVideoRelayStatus('Connexion enregistrée dans ce navigateur.','status ok');}
+  catch(e){setVideoRelayStatus('Enregistrement impossible dans ce navigateur.');}
+}
+async function testVideoRelay() {
+  try{const cfg=getVideoRelayConfig();if(!cfg.url)throw new Error('Adresse du Worker manquante.');const response=await fetch(cfg.url+'/health');const data=await response.json();if(!response.ok||!data.configured)throw new Error('Relais non configuré côté serveur.');setVideoRelayStatus('Relais détecté et configuré. Le test n’a lancé aucune vidéo.','status ok');}
+  catch(e){setVideoRelayStatus(e.message,'status err');}
+}
+async function generateVideoClip(btn, textarea, index) {
+  const prompt=textarea.value.trim();if(!prompt){toast('Prompt vide.','warn');return;}
+  btn.disabled=true;btn.textContent='⏳ Envoi…';
+  try{
+    const payload=await videoRelayRequest('/submit',{method:'POST',body:JSON.stringify({prompt,duration:Number($('videoDuration').value),aspect_ratio:$('videoFormat').value,resolution:'720p'})});
+    const id=payload.request_id||payload.id;
+    if(!id)throw new Error('Le fournisseur n’a pas renvoyé d’identifiant de tâche.');
+    btn.textContent='⏳ Génération en cours…';
+    let state='',result=null;
+    for(let tries=0;tries<90;tries++){
+      await new Promise(resolve=>setTimeout(resolve,5000));
+      const status=await videoRelayRequest('/status?request_id='+encodeURIComponent(id),{method:'GET'});
+      state=String(status.status||status.state||'').toLowerCase();
+      if(['completed','complete','succeeded','success'].includes(state)){result=await videoRelayRequest('/result?request_id='+encodeURIComponent(id),{method:'GET'});break;}
+      if(['failed','error','cancelled'].includes(state))throw new Error(status.error||'La génération a échoué.');
+    }
+    if(!result)throw new Error('Délai d’attente dépassé. La tâche peut encore être active côté fournisseur.');
+    const videoUrl=result.video?.url||result.video_url||result.output?.video_url||result.output?.url||result.url;
+    if(!videoUrl)throw new Error('Résultat reçu, mais URL vidéo introuvable dans la réponse.');
+    let card=btn.parentElement.querySelector('[data-video-output]');
+    if(!card){card=document.createElement('div');card.dataset.videoOutput='1';btn.parentElement.appendChild(card);}
+    card.innerHTML='';
+    const video=document.createElement('video');video.controls=true;video.playsInline=true;video.style.width='100%';video.src=videoUrl;card.appendChild(video);
+    const link=document.createElement('a');link.href=videoUrl;link.target='_blank';link.rel='noopener';link.textContent='Ouvrir / enregistrer la vidéo';link.style.display='block';link.style.marginTop='8px';card.appendChild(link);
+    toast('Clip reçu !','ok');btn.textContent='↻ Regénérer cette scène';
+  }catch(e){toast(e.message,'err');btn.textContent='🎬 Générer cette scène';}
+  finally{btn.disabled=false;}
 }
 function copyVideoScenes() {
   const prompts=Array.from($('videoScenes').querySelectorAll('.video-scene-prompt')).map(t=>t.value).join('\n\n---\n\n');
@@ -2240,6 +2297,7 @@ function switchTab(name) {
    BOOT
 ============================================================ */
 async function bootApp() {
+  try{$('videoRelayUrl').value=localStorage.getItem('artforge_video_relay_url')||'';$('videoRelayToken').value=localStorage.getItem('artforge_video_relay_token')||'';}catch(e){}
   // Restaure les clés API
   try {
     const saved = JSON.parse(localStorage.getItem(CFG.lsKeys) || '[]');
@@ -2300,6 +2358,8 @@ function bind() {
   $('generateBtn').addEventListener('click', generate);
   $('videoBuildBtn').addEventListener('click', buildVideoScenes);
   $('videoCopyBtn').addEventListener('click', copyVideoScenes);
+  $('videoSaveRelay').addEventListener('click',saveVideoRelayConfig);
+  $('videoHealthBtn').addEventListener('click',testVideoRelay);
 
   // + Nouveau style
   $('addStyleBtn').addEventListener('click', async () => {
