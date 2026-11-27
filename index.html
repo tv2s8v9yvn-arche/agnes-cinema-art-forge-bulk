@@ -2246,12 +2246,14 @@ async function testVideoRelay() {
   catch(e){setVideoRelayStatus(e.message,'status err');}
 }
 async function generateVideoClip(btn, textarea, index) {
-  const prompt=textarea.value.trim();if(!prompt){toast('Prompt vide.','warn');return;}
+  const prompt=textarea.value.trim();
+  if(!prompt){toast('Prompt vide.','warn');return;}
   const seconds=Number($('videoDuration').value);
   const estimate=(seconds*0.10).toFixed(2);
-  if(!confirm('Lancer la génération de cette scène de '+seconds+' secondes en 720p ?\n\nEstimation indicative : environ 
+  if(!confirm('Lancer la génération de cette scène de '+seconds+' secondes en 720p ?\\n\\nEstimation indicative : environ $'+estimate+' (tarif susceptible de changer).\\n\\nConfirme pour envoyer la demande au fournisseur.')) return;
+  btn.disabled=true;btn.textContent='⏳ Envoi…';
   try{
-    const payload=await videoRelayRequest('/submit',{method:'POST',body:JSON.stringify({prompt,duration:Number($('videoDuration').value),aspect_ratio:$('videoFormat').value,resolution:'720p'})});
+    const payload=await videoRelayRequest('/submit',{method:'POST',body:JSON.stringify({prompt,duration:seconds,aspect_ratio:$('videoFormat').value,resolution:'720p'})});
     const id=payload.request_id||payload.id;
     if(!id)throw new Error('Le fournisseur n’a pas renvoyé d’identifiant de tâche.');
     btn.textContent='⏳ Génération en cours…';
