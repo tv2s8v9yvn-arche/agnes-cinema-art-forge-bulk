@@ -10,7 +10,7 @@ const cors = (origin) => ({
   "Content-Type": "application/json"
 });
 const json = (body,status=200,headers={}) => new Response(JSON.stringify(body),{status,headers});
-const endpointOk = (s) => typeof s==="string" && /^[a-zA-Z0-9._/-]+$/.test(s) && !s.includes("..");
+const endpointOk = (s) => typeof s==="string" && /^[a-zA-Z0-9._/-]+$/.test(s) && !s.includes("..");\n// Normalize provider responses to JSON so the browser can handle failures predictably.\nconst relayResponse = async (upstream, headers) => {\n  const raw=await upstream.text();\n  let data; try { data=JSON.parse(raw); } catch { data={error:upstream.ok?"Unexpected provider response":"Provider returned a non-JSON error",detail:raw.slice(0,500)}; }\n  return json(data,upstream.status,headers);\n};
 export default {
  async fetch(request, env) {
   const origin=request.headers.get("Origin")||"";
@@ -34,7 +34,7 @@ export default {
    if (resolution!=="720p") return json({error:"Only 720p enabled for initial cost-controlled tests"},400,headers);
    try {
     const upstream=await fetch(base,{method:"POST",headers:{"Authorization":"Key "+env.FAL_KEY,"Content-Type":"application/json"},body:JSON.stringify({prompt,duration:seconds,aspect_ratio:ratio,resolution})});
-    return new Response(await upstream.text(),{status:upstream.status,headers});
+    return await relayResponse(upstream,headers);
    } catch { return json({error:"Provider request failed"},502,headers); }
   }
   const id=url.searchParams.get("request_id");
