@@ -2249,8 +2249,7 @@ async function generateVideoClip(btn, textarea, index) {
   const prompt=textarea.value.trim();
   if(!prompt){toast('Prompt vide.','warn');return;}
   const seconds=Number($('videoDuration').value);
-  const estimate=(seconds*0.10).toFixed(2);
-  if(!confirm('Lancer la génération de cette scène de '+seconds+' secondes en 720p ?\\n\\nEstimation indicative : environ $'+estimate+' (tarif susceptible de changer).\\n\\nConfirme pour envoyer la demande au fournisseur.')) return;
+  if(!confirm('Lancer la génération de cette scène de '+seconds+' secondes en 720p ?\\n\\nLe tarif réel du fournisseur n’est pas vérifié ici : cette demande peut entraîner un coût.\\n\\nConfirme pour envoyer la demande au fournisseur.')) return;
   btn.disabled=true;btn.textContent='⏳ Envoi…';
   try{
     const payload=await videoRelayRequest('/submit',{method:'POST',body:JSON.stringify({prompt,duration:seconds,aspect_ratio:$('videoFormat').value,resolution:'720p'})});
@@ -2267,7 +2266,7 @@ async function generateVideoClip(btn, textarea, index) {
     }
     if(!result)throw new Error('Délai d’attente dépassé. La tâche peut encore être active côté fournisseur.');
     const videoUrl=result.video?.url||result.video_url||result.output?.video_url||result.output?.url||result.url;
-    if(!videoUrl)throw new Error('Résultat reçu, mais URL vidéo introuvable dans la réponse.');
+    if(!videoUrl)throw new Error('Résultat reçu, mais URL vidéo introuvable dans la réponse.');\n    if(typeof videoUrl!=='string'||!/^https:\\/\\//i.test(videoUrl))throw new Error('URL vidéo invalide ou non sécurisée.');
     let card=btn.parentElement.querySelector('[data-video-output]');
     if(!card){card=document.createElement('div');card.dataset.videoOutput='1';btn.parentElement.appendChild(card);}
     card.innerHTML='';
