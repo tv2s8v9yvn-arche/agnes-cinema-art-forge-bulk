@@ -49,7 +49,7 @@ export default {
    try { const upstream=await fetch(base+"/requests/"+id+"/status",{headers:{"Authorization":"Key "+env.FAL_KEY}}); return await relayResponse(upstream,headers); } catch { return json({error:"Provider status failed"},502,headers); }
   }
   if (url.pathname==="/result" && request.method==="GET") {
-   try { const upstream=await fetch(base+"/requests/"+id,{headers:{"Authorization":"Key "+env.FAL_KEY}}); return new Response(await upstream.text(),{status:upstream.status,headers}); } catch { return json({error:"Provider result failed"},502,headers); }
+   try { const upstream=await fetch(base+"/requests/"+id,{headers:{"Authorization":"Key "+env.FAL_KEY}}); return await relayResponse(upstream,headers); } catch { return json({error:"Provider result failed"},502,headers); }
   }
   return json({error:"Not found"},404,headers);
  }
