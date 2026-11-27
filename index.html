@@ -489,6 +489,8 @@ input:focus,textarea:focus,select:focus{
       <label class="lab">Prompt / intention (optionnel)</label>
       <textarea id="promptInput" placeholder="Décris la scène, l'ambiance, le personnage… (laisse vide si tu fournis juste une photo)"></textarea>
 
+      <div class="chk-row" style="margin-top:.7rem"><input type="checkbox" id="cinemaAdCheck"><label for="cinemaAdCheck">🎞️ Mode publicité cinéma (6 scènes)</label><span class="hint">génère automatiquement un storyboard cohérent</span></div>
+
       <div class="chk-row" id="optimizerRow" style="margin-top:.7rem">
         <input type="checkbox" id="aiOptimizerCheck">
         <label for="aiOptimizerCheck">✨ IA Optimizer</label>
@@ -1702,6 +1704,7 @@ function composeDirectPrompt({stylePrompt, userPrompt, visionDesc, bulkItem, var
   );
   if (variantIndex > 0) parts.push('VARIATION ' + (variantIndex + 1) + ': keep the same subject, style, palette and mandatory storyboard element; vary only secondary composition details.');
   parts.push('STYLE PRIORITY: the named style rules above govern the whole image, including subject rendering, materials, costume, architecture, color palette, lighting, camera, composition and background. Do not fall back to a generic aesthetic.');
+  parts.push('CINEMATIC AD CONTINUITY: if this is part of a sequence, preserve consistent subject/product identity, design details, visual palette, and campaign atmosphere while making this shot distinct. Use a filmic camera angle, purposeful depth, professional lighting and visual storytelling.');
   parts.push('IMAGE QUALITY: coherent composition, precise details, intentional lighting, no text, no watermark.');
   return parts.filter(Boolean).join('\n\n');
 }
@@ -1733,6 +1736,7 @@ async function generate() {
   const countPerElement = Math.max(1, Math.min(10, parseInt($('countInput').value || '1', 10)));
   const concurrency = Math.max(1, Math.min(10, parseInt($('concurrencySelect').value || '2', 10)));
   const useStoryboard = $('storyboardCheck').checked;
+  const cinemaAdMode = !!$('cinemaAdCheck')?.checked;
 
   let sbItems = [];
   if (useStoryboard) {
@@ -1744,6 +1748,16 @@ async function generate() {
     }
     sbItems = sb.items.map(x => String(x).trim()).filter(Boolean);
     if (!sbItems.length) { toast('La liste bulk ne contient aucun élément exploitable.', 'err'); return; }
+  } else if (cinemaAdMode) {
+    const product = userPrompt || 'the product or service described by the user';
+    sbItems = [
+      'SCENE 1 — HOOK: cinematic opening establishing shot, instantly intriguing visual, introduce the product/service and campaign mood. Product: '+product,
+      'SCENE 2 — PROBLEM OR DESIRE: show the audience need, aspiration or emotional tension that the product/service addresses. Product: '+product,
+      'SCENE 3 — REVEAL: dramatic, premium hero reveal of the product/service, distinctive composition and lighting. Product: '+product,
+      'SCENE 4 — EXPERIENCE: show the product/service in action with a dynamic camera angle and sensory cinematic detail. Product: '+product,
+      'SCENE 5 — EMOTIONAL PAYOFF: depict the benefit, transformation or memorable emotional moment. Product: '+product,
+      'SCENE 6 — FINAL HERO SHOT: iconic closing composition, product/service clearly visible, polished advertising-film end frame with room for a later tagline (do not render text). Product: '+product
+    ];
   } else {
     sbItems = [''];
   }
